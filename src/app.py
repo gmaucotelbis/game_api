@@ -20,7 +20,13 @@ def get(id):
     game = Game.query.filter_by(id=id).first()
     if(game is None):
         abort(404,'Unknown game')
-    return jsonify(name=game.name,rating=game.rating)
+    return jsonify(
+                name=game.name,
+                ratings=game.ratings,
+                studio=game.studio,
+                realease_date=game.release_date.isoformat(),
+                platforms=[ platform.name for platform in game.platforms ]
+                )
 
 @app.route("/set", methods=['POST'])
 def set():
@@ -32,7 +38,7 @@ def set():
             abort(400,"Game already is database")
         ratings  = request.json["ratings"]
         studio   = request.json["studio"]
-        release_date = datetime.datetime.strptime(request.json["release_date"],"%Y-%m-%d").date()
+        release_date = datetime.date.fromisoformat(request.json["release_date"])
         game     = Game(name, ratings, studio, release_date)
         for platform in request.json["platforms"]:
             existing_platform = Platform.query.filter(Platform.name.ilike(platform)).one_or_none()
