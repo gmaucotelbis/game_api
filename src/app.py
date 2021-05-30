@@ -28,12 +28,12 @@ def set():
         request.get_json(force=True)
         name     = request.json["name"]
         # checking the game is not registered
-        if(Game.query.filter(Game.name.ilike(name)) is not None):
+        if(Game.query.filter(Game.name.ilike(name)).one_or_none() is not None):
             abort(400,"Game already is database")
         ratings  = request.json["ratings"]
         studio   = request.json["studio"]
-        release_date = datetime.date.fromstring(request.json["release_date"])
-        game     = Game(name, ratings, studio)
+        release_date = datetime.datetime.strptime(request.json["release_date"],"%Y-%m-%d").date()
+        game     = Game(name, ratings, studio, release_date)
         for platform in request.json["platforms"]:
             existing_platform = Platform.query.filter(Platform.name.ilike(platform)).one_or_none()
             if(existing_platform is None):
