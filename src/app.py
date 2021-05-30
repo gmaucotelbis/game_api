@@ -5,7 +5,7 @@ from flask import Flask, jsonify, abort, request
 import traceback
 import sys
 
-from src.db import db, Game, Platform
+from src.db import db, Game, Platform, Studio
 
 app = Flask(__name__)
 app.config.from_object("src.config.Config")
@@ -23,7 +23,7 @@ def get(id):
     return jsonify(
                 name=game.name,
                 ratings=game.ratings,
-                studio=game.studio,
+                studio=game.studio.name,
                 realease_date=game.release_date.isoformat(),
                 platforms=[ platform.name for platform in game.platforms ]
                 )
@@ -39,7 +39,12 @@ def set():
         ratings  = int(request.json["ratings"])
         studio   = request.json["studio"]
         release_date = datetime.datetime.strptime(request.json["release_date"], "%Y-%m-%d").date()
-        game     = Game(name, ratings, studio, release_date)
+        game     = Game(name, ratings, release_date)
+        existing_studio = Studio.query.filter(Studio.name.ilike(studio)).one_or_none()
+        if existing_studio is None:
+            game.studio = Studio(studio)
+        else:
+            game.studio = existing_studio
         for platform in request.json["platforms"] :
             existing_platform = Platform.query.filter(Platform.name.ilike(platform)).one_or_none()
             if existing_platform is None :
@@ -69,8 +74,18 @@ def update():
             game.name = request.json["name"]
         if "ratings" in request.json.keys() and request.json["ratings"] != "" :
             game.ratings = int(request.json["ratings"])
-        if "studio" in request.json.keys() and request.json["studio"] != "" :
-            game.studio = request.json["studio"]
+        if "studio" in request.json.keys() and request.json["studio"] != "" and request.json["studio"] != game.studio.name:
+            old_studio = game.studio
+            existing_studio = Studio.query.filter(Studio.name.ilike(request.json["studio"])).one_or_none()
+            if existing_studio is None:
+                game.studio = Studio(request.json["studio"])
+            else:
+                game.studio = existing_studio
+            q = db.session.query(Game)
+            q = q.filter(Game.id != game.id)
+            q = q.filter(Game.studio.name == old_studio.name).limit(1)
+            if q.one_or_none() is None:
+                db.session.delete(old_studio)
         if "release_date" in request.json.keys() and request.json["release_date"] != "" :
             game.release_date = datetime.datetime.strptime(request.json["release_date"], "%Y-%m-%d").date()
         if "platforms" in request.json.keys() :
@@ -88,7 +103,7 @@ def update():
                     # check is still used
                     q = db.session.query(Game)
                     q = q.filter(Game.id != id)
-                    q = q.filter(Game.platforms.any(Platform.name == platform.name))
+                    q = q.filter(Game.platforms.any(Platform.name == platform.name)).limit(1)
                     used = q.one_or_none()
                     if used is None:
                         db.session.delete(platform)
@@ -106,6 +121,18 @@ def delete(id):
         if(game is None):
             abort(404,"Unknwon game")
         db.session.delete(game)
+        # check is studio has more than one game
+        q = db.session.query(Game)
+        q = q.filter(Game.id != game.id)
+        q = q.filter(Game.studio_id == game.studio_id).limit(1)
+        if q.one_or_none() is None:
+            db.session.delete(game.studio)
+        for platform in game.platforms:
+            q = db.session.query(Game)
+            q = q.filter(Game.id != game.id)
+            q = q.filter(Game.platforms.any(Platform.name == platform.name)).limit(1)
+            if q.one_or_none() is None:
+                db.session.delete(platform)
         db.session.commit()
     except BaseException:
         print(f"{traceback.format_exc()}\n{sys.exc_info()[0]}")
