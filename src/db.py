@@ -21,6 +21,12 @@ class Game(db.Model):
     platforms = db.relationship('Platform', secondary=game_platform, lazy='subquery', backref=db.backref('games', lazy=True))
 
     def __init__(self, name, ratings, studio, release_date):
+        if(name == ""):
+            raise BaseException("Name is empty")
+        if(not 0 <= ratings <= 20):
+            raise BaseException("Rating is invalid")
+        if(studio == ""):
+            raise BaseException("Studio is empty")
         self.name         = name
         self.ratings      = ratings
         self.studio       = studio
